@@ -324,7 +324,17 @@ detailsFramework.FrameContainerMixin = {
         frameContainer:CheckMovableLockedState()
 
 
-        frameContainer:SetResizeBounds(50, 50, 1000, 1000) --new versions has this method
+        if (frameContainer.SetResizeBounds) then
+            frameContainer:SetResizeBounds(50, 50, 1000, 1000) --new versions has this method
+        else
+            --classic era (1.14) uses the old resize-bounds API
+            if (frameContainer.SetMinResize) then
+                frameContainer:SetMinResize(50, 50)
+            end
+            if (frameContainer.SetMaxResize) then
+                frameContainer:SetMaxResize(1000, 1000)
+            end
+        end
 
     end,
 

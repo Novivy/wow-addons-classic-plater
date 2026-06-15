@@ -44,7 +44,13 @@ local CreateImageEditorFrame = function()
 	editorWindow:SetFrameStrata("TOOLTIP")
 	editorWindow:SetFrameLevel(background_frame:GetFrameLevel())
 	
-	editorWindow:SetResizeBounds(100, 100, 500, 500)
+	if (editorWindow.SetResizeBounds) then
+		editorWindow:SetResizeBounds(100, 100, 500, 500)
+	elseif (editorWindow.SetMinResize) then
+		--classic era (1.14) uses the old resize-bounds API
+		editorWindow:SetMinResize(100, 100)
+		editorWindow:SetMaxResize(500, 500)
+	end
 
 	_G.DetailsFrameworkImageEditTable = editorWindow
 

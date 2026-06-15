@@ -527,7 +527,14 @@ detailsFramework.HeaderMixin = {
 				if (not columnHeader.bIsRezising) then
 					--get the string length to know the min size
 					local textLength = columnHeader.Text:GetStringWidth() + 6
-					columnHeader:SetResizeBounds(math.max(textLength, self.options.reziser_min_width), columnHeader:GetHeight(), self.options.reziser_max_width, columnHeader:GetHeight())
+					local minWidth = math.max(textLength, self.options.reziser_min_width)
+						if (columnHeader.SetResizeBounds) then
+							columnHeader:SetResizeBounds(minWidth, columnHeader:GetHeight(), self.options.reziser_max_width, columnHeader:GetHeight())
+						elseif (columnHeader.SetMinResize) then
+							--classic era (1.14) uses the old resize-bounds API
+							columnHeader:SetMinResize(minWidth, columnHeader:GetHeight())
+							columnHeader:SetMaxResize(self.options.reziser_max_width, columnHeader:GetHeight())
+						end
 					columnHeader.bIsRezising = true
 					columnHeader:StartSizing("right")
 				end
