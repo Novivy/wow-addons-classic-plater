@@ -64,6 +64,42 @@ local castTimeCache = {
 }
 local castTimeCacheStartTimes = setmetatable({}, { __mode = "v" })
 
+-- Per-NPC cast time overrides. The data file (NPCCastTimes.lua) ships [npcEntry]={[spellID]=ms};
+-- we localize each spellID to its name via GetSpellInfo here so the runtime key (npcID..spellName
+-- from the combat log) matches on any client locale (frFR/deDE/enUS/...). The combat log never
+-- gives us the enemy spellID (it's 0), so the shipped spellID is used ONLY to derive the localized
+-- name at load. Sources: server DB (creature_spell_list + creature_ai_scripts ACTION_T_CAST) +
+-- ScriptDevAI C++, resolved through SpellCastTimes.dbc.
+local NPCCastTimeDB = {}
+-- npcID..spellName -> real spellID, so the NPC branch can show the correct icon on the first cast
+-- (the vanilla NPCspellNameToID lookup is populated by a delayed timer and often misses).
+local NPCCastSpellID = {}
+do
+    local raw = LibClassicCasterino_NPCCastTimes
+    if raw then
+        local tmp = {}
+        for npcID, spells in pairs(raw) do
+            for spellID, ms in pairs(spells) do
+                local name = GetSpellInfo(spellID)
+                if name then
+                    local key = npcID..name
+                    NPCCastSpellID[key] = spellID -- ranks share an icon, so any id for this name works
+                    local cur = tmp[key]
+                    if cur == nil then
+                        tmp[key] = ms
+                    elseif cur ~= ms then
+                        tmp[key] = false -- same npc, same name, two cast times: can't tell apart, fall back
+                    end
+                end
+            end
+        end
+        for key, ms in pairs(tmp) do
+            if ms then NPCCastTimeDB[key] = ms end
+        end
+        LibClassicCasterino_NPCCastTimes = nil -- free the raw data
+    end
+end
+
 local AIMED_SHOT = GetSpellInfo(19434)
 local MULTI_SHOT = GetSpellInfo(25294)
 local AimedDelay = 1
@@ -198,16 +234,24 @@ function f:COMBAT_LOG_EVENT_UNFILTERED(event)
             end
         else
             local castUID = makeCastUID(srcGUID, spellName)
-            local cachedTime = castTimeCache[castUID]
-            local spellID = NPCspellNameToID[spellName] -- just for the icon
+            -- Prefer the real spellID from our DB (correct icon immediately), then the delayed
+            -- name->ID lookup, then the generic Engineering icon as a last resort.
+            local spellID = NPCCastSpellID[castUID] or NPCspellNameToID[spellName]
             if not spellID then
                 spellID = 4036 -- Engineering Icon
             end
-            if cachedTime then
-                CastStart(srcGUID, "CAST", spellName, spellID, cachedTime*1000)
+            local overrideMs = NPCCastTimeDB[castUID]
+            if overrideMs then
+                -- Exact server cast time (npcID..spellName), no guessing/learning needed
+                CastStart(srcGUID, "CAST", spellName, spellID, overrideMs)
             else
-                castTimeCacheStartTimes[srcGUID..castUID] = GetTime()
-                CastStart(srcGUID, "CAST", spellName, spellID, 1500) -- using default 1.5s cast time for now
+                local cachedTime = castTimeCache[castUID]
+                if cachedTime then
+                    CastStart(srcGUID, "CAST", spellName, spellID, cachedTime*1000)
+                else
+                    castTimeCacheStartTimes[srcGUID..castUID] = GetTime()
+                    CastStart(srcGUID, "CAST", spellName, spellID, 1500) -- fallback: guess, then learn on SPELL_CAST_SUCCESS
+                end
             end
         end
     elseif eventType == "SPELL_CAST_FAILED" then
