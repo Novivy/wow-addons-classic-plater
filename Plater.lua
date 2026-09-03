@@ -9706,7 +9706,12 @@ end
 						end
 						castBar.IsInterrupted = true
 
-						if (Plater.db.profile.show_interrupt_author) then
+						--a cast can also stop without anyone interrupting it (the caster died mid cast, moved,
+						--lost line of sight, got a spell failure); those come with no valid source, so there is
+						--nobody to credit and the author text/animation must be skipped
+						local hasInterruptSource = name and name ~= "" and sourceGUID and sourceGUID ~= "" and sourceGUID ~= "0000000000000000" and sourceGUID ~= targetGUID
+
+						if (Plater.db.profile.show_interrupt_author and hasInterruptSource) then
 							--get owner name if a pet interrupted
 							local petOwnerTable = PET_CACHE[sourceGUID]
 							if (petOwnerTable) then
